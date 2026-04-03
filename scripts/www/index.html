@@ -1,11 +1,811 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PakePlus</title>
-    </head>
-    <body>
-        PakePlus
-    </body>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>宝宝待产包与倒计时</title>
+  
+  <!-- 引入 Tailwind CSS 引擎 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 引入 Phosphor 图标库 -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <!-- 引入 React 核心库 -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- 引入 Babel 编译器用于在浏览器中运行 JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* 自定义一些简单的动画和样式修正 */
+    body { -webkit-tap-highlight-color: transparent; }
+    .ph-spin { animation: spin 1s linear infinite; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    .animate-pulse-fast { animation: pulse-fast 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  </style>
+</head>
+<body class="bg-pink-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // 包含个性化标签的待产包总库
+    const masterChecklist = [
+      {
+        id: 'mom',
+        title: '👩 妈妈入院待产包',
+        items: [
+          { id: 'm1', name: '产褥垫 (大号/中号，10-20片)' },
+          { id: 'm2', name: '一次性纯棉内裤 (10-15条)' },
+          { id: 'm3', name: '产妇卫生巾 (夜用/超长)' },
+          { id: 'm4', name: '哺乳文胸 (纯棉无钢圈，2-3件)' },
+          { id: 'm5', name: '防滑软底拖鞋/包跟月子鞋' },
+          { id: 'm6', name: '弯头吸管或带吸管的水杯', tags: { delivery: ['c-section'] } },
+          { id: 'm7', name: '证件 (身份证、准生证、医保卡及病历)' },
+          { id: 'm8', name: '吸奶器 (电动优先)' },
+          { id: 'm9', name: '巧克力/红牛 (顺产补充体力)', tags: { delivery: ['natural'] } },
+          { id: 'm10', name: '刀纸 (产房用)', tags: { delivery: ['natural'] } },
+          { id: 'm11', name: '专用束腹带 (术后固定伤口)', tags: { delivery: ['c-section'] } },
+        ]
+      },
+      {
+        id: 'clothing',
+        title: '👕 宝宝衣物',
+        items: [
+          { id: 'c1', name: '无骨连体衣/和尚服 (52码，3-5件)' },
+          { id: 'c2', name: '无骨缝制胎帽 (1-2个)' },
+          { id: 'c3', name: '婴儿纯棉松口袜子 (3-5双)' },
+          { id: 'c_sum1', name: '薄款纯棉短袖/竹纤维衣', tags: { season: ['summer'] } },
+          { id: 'c_win1', name: '夹棉连体衣/加厚冬装', tags: { season: ['winter'] } },
+          { id: 'c_sum2', name: '薄款透气纱布包被', tags: { season: ['summer'] } },
+          { id: 'c_win2', name: '加厚保暖抱被/包被', tags: { season: ['winter', 'spring', 'autumn'] } },
+        ]
+      },
+      {
+        id: 'diaper',
+        title: '🧻 尿布与日常清洁',
+        items: [
+          { id: 'd1', name: 'NB号纸尿裤 (先备1-2包)' },
+          { id: 'd2', name: '婴儿纯水湿巾 (多包)' },
+          { id: 'd3', name: '棉柔巾 (多包，洗屁屁、擦脸用)' },
+          { id: 'd4', name: '护臀膏 (预防红屁股)' },
+          { id: 'd_sum1', name: '桃子水/液体爽身粉 (防痱子)', tags: { season: ['summer'] } },
+          { id: 'd_win1', name: '滋润面霜/婴儿身体乳', tags: { season: ['winter', 'autumn'] } },
+          { id: 'd5', name: '婴儿专用洗衣液/洗衣皂' },
+          { id: 'd6', name: '抚触油' },
+          { id: 'd7', name: '细轴棉签 (清理肚脐、鼻屎)' },
+          { id: 'd8', name: '碘伏 (新生儿脐带消毒)' },
+        ]
+      },
+      {
+        id: 'feeding',
+        title: '🍼 喂养用品',
+        items: [
+          { id: 'f1', name: '新生儿宽口径奶瓶 (150ml，1-2个)' },
+          { id: 'f2', name: '奶瓶清洗剂、奶瓶刷 & 奶嘴刷' },
+          { id: 'f3', name: '婴儿配方奶粉 (1段，备一小听)' },
+          { id: 'f4', name: '奶瓶消毒锅 (蒸汽或紫外线)' },
+          { id: 'f5', name: '恒温水壶 (冲奶粉神器)' },
+          { id: 'f6', name: '纯棉口水巾/纱布方巾 (10条以上)' },
+        ]
+      },
+      {
+        id: 'sleep',
+        title: '🛏️ 睡眠与大件出行',
+        items: [
+          { id: 's1', name: '婴儿床 & 偏硬透气床垫' },
+          { id: 's2', name: '纯棉床品 (床单、隔尿垫2-3块)' },
+          { id: 's_sum1', name: '薄款透气防惊跳睡袋', tags: { season: ['summer'] } },
+          { id: 's_win1', name: '恒温/夹棉防惊跳睡袋', tags: { season: ['winter', 'spring', 'autumn'] } },
+          { id: 's4', name: '新生儿提篮 / 安全座椅' },
+          { id: 's5', name: '婴儿推车 (可平躺，避震好)' },
+          { id: 's6', name: '婴儿专用浴盆 & 沐浴露' },
+        ]
+      }
+    ];
+
+    // 根据预产期推算季节 (北半球)
+    const getSeasonFromDate = (dateString) => {
+      if (!dateString) return 'unknown';
+      const month = new Date(dateString).getMonth() + 1;
+      if (month >= 3 && month <= 5) return 'spring';
+      if (month >= 6 && month <= 8) return 'summer';
+      if (month >= 9 && month <= 11) return 'autumn';
+      return 'winter';
+    };
+
+    // API 指数退避重试函数
+    const fetchWithRetry = async (url, options, retries = 5) => {
+      const delays = [1000, 2000, 4000, 8000, 16000];
+      for (let i = 0; i < retries; i++) {
+        try {
+          const response = await fetch(url, options);
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          return await response.json();
+        } catch (e) {
+          if (i === retries - 1) throw e;
+          await new Promise(res => setTimeout(res, delays[i]));
+        }
+      }
+    };
+
+    function App() {
+      const [dueDate, setDueDate] = useState('');
+      const [showDateModal, setShowDateModal] = useState(false);
+      const [checklist, setChecklist] = useState([]);
+      const [expandedCategories, setExpandedCategories] = useState({});
+      
+      // 状态：分娩方式与季节
+      const [deliveryMethod, setDeliveryMethod] = useState('unknown'); 
+      const [season, setSeason] = useState('auto'); 
+
+      // AI 助手相关状态
+      const [showAiModal, setShowAiModal] = useState(false);
+      const [isAiLoading, setIsAiLoading] = useState(false);
+      const [aiSuggestions, setAiSuggestions] = useState([]);
+      const [aiError, setAiError] = useState('');
+
+      // 生成定制化的待产包
+      const generateCustomChecklist = (currentDelivery, currentSeason, currentDate) => {
+        const actualSeason = currentSeason === 'auto' ? getSeasonFromDate(currentDate) : currentSeason;
+        
+        return masterChecklist.map(category => {
+          const filteredItems = category.items.filter(item => {
+            if (!item.tags) return true; // 通用物品
+            
+            // 检查分娩方式条件
+            const deliveryMatch = !item.tags.delivery || item.tags.delivery.includes(currentDelivery) || currentDelivery === 'unknown';
+            // 检查季节条件
+            const seasonMatch = !item.tags.season || item.tags.season.includes(actualSeason) || actualSeason === 'unknown';
+            
+            return deliveryMatch && seasonMatch;
+          });
+
+          return {
+            ...category,
+            items: filteredItems.map(item => ({ ...item, checked: false }))
+          };
+        });
+      };
+
+      // 初始化加载数据
+      useEffect(() => {
+        const savedDueDate = localStorage.getItem('babyAppDueDate');
+        const savedChecklist = localStorage.getItem('babyAppChecklist');
+        const savedDelivery = localStorage.getItem('babyAppDelivery') || 'unknown';
+        const savedSeason = localStorage.getItem('babyAppSeason') || 'auto';
+
+        if (savedDueDate) setDueDate(savedDueDate);
+        setDeliveryMethod(savedDelivery);
+        setSeason(savedSeason);
+
+        let initialChecklist = generateCustomChecklist(savedDelivery, savedSeason, savedDueDate);
+
+        if (savedChecklist) {
+          // 恢复之前勾选的状态，跨版本合并（同时保留AI推荐等新增分类）
+          const parsedSaved = JSON.parse(savedChecklist);
+          
+          // 合并标准分类
+          initialChecklist = initialChecklist.map(cat => {
+            const savedCat = parsedSaved.find(sc => sc.id === cat.id);
+            if (!savedCat) return cat;
+            return {
+              ...cat,
+              items: cat.items.map(item => {
+                const savedItem = savedCat.items.find(si => si.id === item.id);
+                return savedItem ? { ...item, checked: savedItem.checked } : item;
+              })
+            };
+          });
+
+          // 补充非标准分类（例如AI推荐添加的分类）
+          parsedSaved.forEach(sc => {
+            if (!initialChecklist.find(c => c.id === sc.id)) {
+              initialChecklist.push(sc);
+            }
+          });
+        }
+        
+        setChecklist(initialChecklist);
+
+        // 默认展开所有分类
+        const expandAll = {};
+        initialChecklist.forEach(c => expandAll[c.id] = true);
+        setExpandedCategories(expandAll);
+      }, []);
+
+      // 数据发生改变时保存到 LocalStorage
+      useEffect(() => {
+        if (checklist.length > 0) {
+          localStorage.setItem('babyAppChecklist', JSON.stringify(checklist));
+        }
+      }, [checklist]);
+
+      // 处理设置保存
+      const handleSettingsSave = () => {
+        localStorage.setItem('babyAppDueDate', dueDate);
+        localStorage.setItem('babyAppDelivery', deliveryMethod);
+        localStorage.setItem('babyAppSeason', season);
+        
+        // 重新生成列表并保留已勾选的旧数据状态
+        const newBaseList = generateCustomChecklist(deliveryMethod, season, dueDate);
+        setChecklist(prev => {
+          const mergedList = newBaseList.map(cat => {
+            const prevCat = prev.find(pc => pc.id === cat.id);
+            if (!prevCat) return cat;
+            return {
+              ...cat,
+              items: cat.items.map(item => {
+                const prevItem = prevCat.items.find(pi => pi.id === item.id);
+                return prevItem ? { ...item, checked: prevItem.checked } : item;
+              })
+            };
+          });
+          
+          // 保留用户通过AI等方式自定义的额外分类
+          prev.forEach(pc => {
+             if (!mergedList.find(mc => mc.id === pc.id)) {
+                 mergedList.push(pc);
+             }
+          });
+          return mergedList;
+        });
+        setShowDateModal(false);
+      };
+
+      // 切换物品勾选状态
+      const toggleItem = (categoryId, itemId) => {
+        setChecklist(prev => prev.map(category => {
+          if (category.id === categoryId) {
+            return {
+              ...category,
+              items: category.items.map(item => 
+                item.id === itemId ? { ...item, checked: !item.checked } : item
+              )
+            };
+          }
+          return category;
+        }));
+      };
+
+      // 切换分类折叠/展开
+      const toggleCategory = (categoryId) => {
+        setExpandedCategories(prev => ({
+          ...prev,
+          [categoryId]: !prev[categoryId]
+        }));
+      };
+
+      // 一键打包某个分类 (全部勾选/取消勾选)
+      const packCategory = (e, categoryId, isAllChecked) => {
+        e.stopPropagation(); // 阻止折叠面板触发
+        setChecklist(prev => prev.map(category => {
+          if (category.id === categoryId) {
+            return {
+              ...category,
+              items: category.items.map(item => ({ ...item, checked: !isAllChecked }))
+            };
+          }
+          return category;
+        }));
+      };
+
+      // 计算倒计时天数
+      const calculateDaysLeft = () => {
+        if (!dueDate) return null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const target = new Date(dueDate);
+        target.setHours(0, 0, 0, 0);
+        
+        const diffTime = target - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays;
+      };
+
+      const daysLeft = calculateDaysLeft();
+
+      // 进度统计
+      const totalItems = checklist.reduce((acc, cat) => acc + cat.items.length, 0);
+      const completedItems = checklist.reduce((acc, cat) => acc + cat.items.filter(i => i.checked).length, 0);
+      const progressPercent = totalItems === 0 ? 0 : Math.round((completedItems / totalItems) * 100);
+
+      // Gemini API: 请求 AI 查漏补缺推荐
+      const fetchAiSuggestions = async () => {
+        setShowAiModal(true);
+        setIsAiLoading(true);
+        setAiError('');
+        setAiSuggestions([]);
+
+        // 注意：如果您将此 HTML 文件下载到本地运行，您需要在此处填入您自己的 Gemini API Key 才能使用 AI 功能
+        const apiKey = ""; 
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        const actualSeason = season === 'auto' ? getSeasonFromDate(dueDate) : season;
+        const seasonMap = { spring: '春天', summer: '夏天', autumn: '秋天', winter: '冬天', unknown: '不确定' };
+        const seasonName = seasonMap[actualSeason] || '不确定';
+        const deliveryName = deliveryMethod === 'unknown' ? '不确定' : deliveryMethod === 'natural' ? '顺产' : '剖腹产';
+
+        const promptText = `
+          你是一位拥有20年经验的专业金牌月嫂和高级育儿专家。
+          用户的宝宝预计在${seasonName}出生，计划的分娩方式是${deliveryName}。
+          用户已经准备了基础的待产包（包括常见的衣物、尿布、奶瓶、产褥垫等）。
+          请你根据用户的【特定季节】和【分娩方式】，发挥你的专业经验，额外推荐 3 个**极其有用、能大幅提升新手爸妈幸福感、且新手容易忽略的“进阶好物”或“小众神器”**。
+          要求：
+          1. 不要推荐基础清单里常见的物品。
+          2. 给出物品名称，并简短说明推荐理由（每条理由限制在30字以内）。
+        `;
+
+        const payload = {
+          contents: [{ parts: [{ text: promptText }] }],
+          systemInstruction: { parts: [{ text: "You are a professional baby care expert. Always respond in Chinese." }] },
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  name: { type: "STRING", description: "物品的简短名称" },
+                  reason: { type: "STRING", description: "推荐理由，不超过30字" }
+                },
+                required: ["name", "reason"]
+              }
+            }
+          }
+        };
+
+        try {
+          const result = await fetchWithRetry(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const textResult = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (textResult) {
+            const parsed = JSON.parse(textResult);
+            setAiSuggestions(parsed);
+          } else {
+            throw new Error("Invalid format");
+          }
+        } catch (err) {
+          console.error("AI Fetch Error:", err);
+          setAiError('哎呀，网络或API存在异常，AI 专家暂时去照顾其他宝宝了，请稍后再试哦。');
+        } finally {
+          setIsAiLoading(false);
+        }
+      };
+
+      // 将 AI 推荐添加到清单
+      const addAiItemToChecklist = (suggestion) => {
+        setChecklist(prev => {
+          const newList = [...prev];
+          let aiCatIndex = newList.findIndex(c => c.id === 'ai_suggestions');
+          
+          if (aiCatIndex === -1) {
+            newList.push({
+              id: 'ai_suggestions',
+              title: '✨ AI 专属推荐好物',
+              items: []
+            });
+            aiCatIndex = newList.length - 1;
+          }
+          
+          const exists = newList[aiCatIndex].items.some(i => i.name.startsWith(suggestion.name));
+          if (!exists) {
+            newList[aiCatIndex].items.push({
+              id: `ai_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+              name: `${suggestion.name} - ${suggestion.reason}`,
+              checked: false
+            });
+          }
+          return newList;
+        });
+
+        setExpandedCategories(prev => ({ ...prev, ai_suggestions: true }));
+        
+        // 显示添加成功的小提示（简易版）
+        const btn = document.getElementById(`btn-${suggestion.name}`);
+        if(btn) {
+          const oldText = btn.innerHTML;
+          btn.innerHTML = '<i class="ph ph-check"></i> 已添加';
+          btn.classList.replace('text-pink-600', 'text-green-600');
+          btn.classList.replace('bg-pink-50', 'bg-green-50');
+          btn.disabled = true;
+          setTimeout(() => {
+            btn.innerHTML = oldText;
+            btn.classList.replace('text-green-600', 'text-pink-600');
+            btn.classList.replace('bg-green-50', 'bg-pink-50');
+            btn.disabled = false;
+          }, 2000);
+        }
+      };
+
+      return (
+        <div className="min-h-screen font-sans text-slate-800 pb-10 flex justify-center">
+          <div className="w-full max-w-md bg-white shadow-xl min-h-screen relative">
+            
+            {/* 顶部导航 */}
+            <header className="bg-gradient-to-r from-pink-400 to-rose-400 text-white p-5 rounded-b-3xl shadow-md">
+              <div className="flex justify-between items-center mb-6">
+                <h1 className="text-xl font-bold flex items-center gap-2">
+                  <i className="ph-fill ph-baby text-[28px] text-pink-100"></i>
+                  欢迎，准妈妈
+                </h1>
+                <button 
+                  onClick={() => setShowDateModal(true)}
+                  className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition"
+                >
+                  <i className="ph-fill ph-gear text-xl"></i>
+                </button>
+              </div>
+
+              {/* 倒计时卡片 */}
+              <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-5 text-center shadow-sm border border-white/30 relative overflow-hidden">
+                <i className="ph-fill ph-heart text-[100px] absolute -right-6 -bottom-6 text-white opacity-10"></i>
+                {dueDate ? (
+                  <div>
+                    <p className="text-sm text-pink-50 font-medium mb-1 flex items-center justify-center gap-2">
+                      <i className="ph ph-calendar-heart text-base"></i>
+                      预产期: {dueDate}
+                    </p>
+                    {daysLeft > 0 ? (
+                      <div>
+                        <div className="text-sm mt-2">距离宝宝出生还有</div>
+                        <div className="text-5xl font-extrabold my-2 drop-shadow-md tracking-tight">
+                          {daysLeft} <span className="text-xl font-medium">天</span>
+                        </div>
+                      </div>
+                    ) : daysLeft === 0 ? (
+                      <div className="text-3xl font-bold my-4 animate-pulse-fast">
+                        👶 宝宝今天预产期啦！
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="text-sm mt-2">宝宝已经出生</div>
+                        <div className="text-4xl font-bold my-2">
+                          {Math.abs(daysLeft)} <span className="text-xl">天</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="py-4">
+                    <p className="mb-3 text-pink-50">还没有设置预产期哦</p>
+                    <button 
+                      onClick={() => setShowDateModal(true)}
+                      className="bg-white text-pink-500 font-bold py-2 px-6 rounded-full shadow-md hover:scale-105 transition transform"
+                    >
+                      点击设置预产期
+                    </button>
+                  </div>
+                )}
+              </div>
+            </header>
+
+            {/* 待产包主内容 */}
+            <main className="p-5">
+              {/* 定制标签提示区 */}
+              {(deliveryMethod !== 'unknown' || dueDate) && (
+                <div className="mb-4 flex flex-wrap justify-center gap-2">
+                  {deliveryMethod !== 'unknown' && (
+                    <span className="text-xs bg-pink-100/80 px-3 py-1.5 rounded-full text-pink-600 font-medium">
+                      {deliveryMethod === 'natural' ? '🌟 顺产模式' : '🏥 剖腹产模式'}
+                    </span>
+                  )}
+                  {dueDate && (
+                    <span className="text-xs bg-pink-100/80 px-3 py-1.5 rounded-full text-pink-600 font-medium">
+                      {season === 'auto' ? 
+                        `☁️ 自动适配 (${getSeasonFromDate(dueDate) === 'spring' ? '春季' : getSeasonFromDate(dueDate) === 'summer' ? '夏季' : getSeasonFromDate(dueDate) === 'autumn' ? '秋季' : '冬季'})` 
+                        : `☁️ ${season === 'spring' ? '春季' : season === 'summer' ? '夏季' : season === 'autumn' ? '秋季' : '冬季'}模式`}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* AI 智能查漏补缺入口 */}
+              <div 
+                onClick={fetchAiSuggestions}
+                className="mb-6 bg-gradient-to-r from-violet-100 to-fuchsia-100 p-4 rounded-2xl border border-violet-200 cursor-pointer hover:shadow-md transition active:scale-[0.98] flex items-center justify-between"
+              >
+                <div>
+                  <h3 className="font-bold text-violet-800 flex items-center gap-1">
+                    <i className="ph-fill ph-robot text-[18px] text-violet-600"></i> 
+                    ✨ AI 智能查漏补缺
+                  </h3>
+                  <p className="text-xs text-violet-600 mt-1">根据您的预产期与分娩方式，获取金牌月嫂的私藏好物推荐</p>
+                </div>
+                <div className="bg-white p-2 rounded-full shadow-sm flex items-center justify-center w-8 h-8">
+                  <i className="ph-fill ph-sparkle text-fuchsia-500"></i>
+                </div>
+              </div>
+
+              {/* 总进度条 */}
+              <div className="mb-6 bg-pink-50 rounded-2xl p-4 shadow-inner">
+                <div className="flex justify-between items-end mb-2">
+                  <h2 className="font-bold text-gray-700 flex items-center gap-2">
+                    <i className="ph ph-list-checks text-xl text-pink-500"></i>
+                    待产包准备进度
+                  </h2>
+                  <span className="text-sm font-semibold text-pink-600 bg-pink-100 px-2 py-1 rounded-lg">
+                    {completedItems} / {totalItems}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3.5 mb-1 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-pink-400 to-rose-400 h-3.5 rounded-full transition-all duration-500 ease-out" 
+                    style={{ width: `${progressPercent}%` }}
+                  ></div>
+                </div>
+                
+                <div className="flex justify-between items-center mt-3">
+                  {progressPercent === 100 && totalItems > 0 ? (
+                    <p className="text-xs text-green-600 font-medium animate-pulse-fast flex items-center gap-1">
+                      <i className="ph-fill ph-sparkle text-sm"></i> 太棒了！物品已备齐！
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500">加油，还差 {totalItems - completedItems} 件物品哦</p>
+                  )}
+                  
+                  {/* 全局一键打包/重置 */}
+                  <button 
+                    onClick={() => {
+                      const isAllDone = completedItems === totalItems && totalItems > 0;
+                      setChecklist(prev => prev.map(c => ({
+                        ...c, 
+                        items: c.items.map(i => ({...i, checked: !isAllDone}))
+                      })));
+                    }}
+                    className="text-xs bg-white border border-pink-200 text-pink-500 px-3 py-1.5 rounded-full font-medium hover:bg-pink-50 transition flex items-center gap-1 shadow-sm active:scale-95"
+                  >
+                    <i className="ph ph-package text-sm"></i>
+                    {completedItems === totalItems && totalItems > 0 ? '一键重置' : '一键打包全场'}
+                  </button>
+                </div>
+              </div>
+
+              {/* 清单分类列表 */}
+              <div className="space-y-4">
+                {checklist.map((category) => {
+                  const catTotal = category.items.length;
+                  const catChecked = category.items.filter(i => i.checked).length;
+                  const isExpanded = expandedCategories[category.id];
+                  const isAiCategory = category.id === 'ai_suggestions';
+
+                  return (
+                    <div key={category.id} className={`bg-white border rounded-2xl shadow-sm overflow-hidden ${isAiCategory ? 'border-violet-200' : 'border-pink-100'}`}>
+                      {/* 分类头部 (点击折叠/展开) */}
+                      <div 
+                        onClick={() => toggleCategory(category.id)}
+                        className={`flex justify-between items-center p-4 cursor-pointer transition group ${isAiCategory ? 'hover:bg-violet-50/50' : 'hover:bg-pink-50/50'}`}
+                      >
+                        <div>
+                          <h3 className={`font-bold text-lg ${isAiCategory ? 'text-violet-700' : 'text-gray-800'}`}>
+                            {category.title}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-xs text-gray-400">
+                              已准备 {catChecked} / {catTotal} 项
+                            </p>
+                            {/* 单分类一键打包按钮 */}
+                            {catTotal > 0 && (
+                              <button 
+                                onClick={(e) => packCategory(e, category.id, catChecked === catTotal)}
+                                className={`text-[10px] px-2 py-0.5 rounded border transition opacity-0 group-hover:opacity-100 md:opacity-100 ${isAiCategory ? 'bg-violet-50 text-violet-500 border-violet-100 hover:bg-violet-100' : 'bg-pink-50 text-pink-500 border-pink-100 hover:bg-pink-100'}`}
+                              >
+                                {catChecked === catTotal ? '撤销打包' : '一键打包'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {/* 分类小进度圆环效果 */}
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center relative ${isAiCategory ? 'bg-violet-50' : 'bg-pink-50'}`}>
+                            {catChecked === catTotal && catTotal > 0 ? (
+                              <i className="ph-fill ph-check-circle text-[22px] text-green-500"></i>
+                            ) : (
+                              <span className={`text-xs font-bold ${isAiCategory ? 'text-violet-500' : 'text-pink-500'}`}>
+                                {catTotal === 0 ? '0' : Math.round((catChecked/catTotal)*100)}%
+                              </span>
+                            )}
+                          </div>
+                          {isExpanded ? <i className="ph ph-caret-up text-xl text-gray-400"></i> : <i className="ph ph-caret-down text-xl text-gray-400"></i>}
+                        </div>
+                      </div>
+
+                      {/* 分类物品列表 */}
+                      {isExpanded && (
+                        <div className="border-t border-gray-100 p-2 bg-gray-50/50">
+                          {category.items.map(item => (
+                            <div 
+                              key={item.id} 
+                              onClick={() => toggleItem(category.id, item.id)}
+                              className={`flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200 ${item.checked ? 'opacity-60 bg-gray-100' : 'hover:bg-white hover:shadow-sm active:scale-[0.98]'}`}
+                            >
+                              <div className="mt-0.5 shrink-0">
+                                {item.checked ? (
+                                  <i className={`ph-fill ph-check-circle text-[24px] ${isAiCategory ? 'text-violet-400' : 'text-rose-400'}`}></i>
+                                ) : (
+                                  <i className="ph ph-circle text-[24px] text-gray-300"></i>
+                                )}
+                              </div>
+                              <span className={`text-[15px] leading-snug ${item.checked ? 'text-gray-400 line-through' : 'text-gray-700 font-medium'}`}>
+                                {item.name}
+                              </span>
+                            </div>
+                          ))}
+                          {category.items.length === 0 && (
+                            <div className="p-4 text-center text-sm text-gray-400">
+                              此分类下暂无适合当前条件的物品
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </main>
+
+            {/* AI 智能推荐弹窗 */}
+            {showAiModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-opacity">
+                <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl max-h-[90vh] flex flex-col transform transition-all">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-violet-800 flex items-center gap-2">
+                      <i className="ph-fill ph-robot text-[24px] text-violet-500"></i>
+                      专家推荐清单
+                    </h3>
+                    <button onClick={() => setShowAiModal(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="overflow-y-auto flex-1 pr-1">
+                    {isAiLoading ? (
+                      <div className="flex flex-col items-center justify-center py-10 space-y-4">
+                        <i className="ph ph-spinner ph-spin text-[40px] text-violet-400"></i>
+                        <p className="text-sm text-gray-500 animate-pulse-fast text-center">
+                          AI 月嫂正在分析您的季节和分娩方式<br/>为您寻找隐藏的好物...
+                        </p>
+                      </div>
+                    ) : aiError ? (
+                      <div className="text-center py-8">
+                        <p className="text-rose-500 text-sm">{aiError}</p>
+                        <button 
+                          onClick={fetchAiSuggestions}
+                          className="mt-4 px-4 py-2 bg-violet-100 text-violet-700 rounded-lg text-sm font-medium"
+                        >
+                          重新尝试
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded text-center">
+                          根据您的专属情况，除了基础物品外，强烈建议备上以下几项：
+                        </p>
+                        {aiSuggestions.map((item, idx) => (
+                          <div key={idx} className="border border-violet-100 bg-violet-50/30 rounded-xl p-3 flex flex-col gap-2">
+                            <div className="font-bold text-violet-900 text-[15px] flex items-center gap-1.5">
+                              <i className="ph-fill ph-sparkle text-sm text-fuchsia-400"></i>
+                              {item.name}
+                            </div>
+                            <p className="text-sm text-gray-600 leading-snug">
+                              {item.reason}
+                            </p>
+                            <button 
+                              id={`btn-${item.name}`}
+                              onClick={() => addAiItemToChecklist(item)}
+                              className="mt-1 flex items-center justify-center gap-1 w-full py-1.5 bg-pink-50 text-pink-600 border border-pink-200 rounded-lg text-xs font-semibold hover:bg-pink-100 transition active:scale-95"
+                            >
+                              <i className="ph ph-plus text-sm"></i> 加入我的待产包
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 个性化设置弹窗 */}
+            {showDateModal && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+                <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl max-h-[90vh] overflow-y-auto">
+                  <h3 className="text-xl font-bold text-gray-800 mb-4 text-center flex items-center justify-center gap-2">
+                    <i className="ph-fill ph-gear text-[20px] text-pink-500"></i>
+                    个性化定制待产包
+                  </h3>
+                  
+                  <div className="space-y-5 mb-6">
+                    {/* 预产期设置 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">
+                        预产期 / 宝宝生日：
+                      </label>
+                      <input 
+                        type="date" 
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        className="w-full border-2 border-pink-100 rounded-xl p-3 text-gray-700 focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition"
+                      />
+                    </div>
+
+                    {/* 分娩方式选择 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">
+                        计划分娩方式：
+                      </label>
+                      <div className="flex gap-2">
+                        {['unknown', 'natural', 'c-section'].map((type) => (
+                          <button
+                            key={type}
+                            onClick={() => setDeliveryMethod(type)}
+                            className={`flex-1 py-2 text-sm rounded-lg border-2 transition ${
+                              deliveryMethod === type 
+                                ? 'border-pink-400 bg-pink-50 text-pink-600 font-bold' 
+                                : 'border-gray-100 text-gray-500 hover:bg-gray-50'
+                            }`}
+                          >
+                            {type === 'unknown' ? '待定' : type === 'natural' ? '顺产' : '剖腹产'}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-gray-400 mt-1.5">
+                        * 将根据选择为您智能增减伤口护理、能量补给等专属物品
+                      </p>
+                    </div>
+
+                    {/* 季节天气适配 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">
+                        季节衣物适配：
+                      </label>
+                      <select 
+                        value={season}
+                        onChange={(e) => setSeason(e.target.value)}
+                        className="w-full border-2 border-pink-100 rounded-xl p-3 text-gray-700 focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition bg-white"
+                      >
+                        <option value="auto">自动 (根据预产期推算)</option>
+                        <option value="spring">春季 (适中)</option>
+                        <option value="summer">夏季 (透气轻薄)</option>
+                        <option value="autumn">秋季 (适中)</option>
+                        <option value="winter">冬季 (保暖夹棉)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={() => setShowDateModal(false)}
+                      className="flex-1 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition"
+                    >
+                      取消
+                    </button>
+                    <button 
+                      onClick={handleSettingsSave}
+                      className="flex-[2] bg-gradient-to-r from-pink-400 to-rose-400 text-white font-bold py-3 rounded-xl shadow-md hover:opacity-90 transition active:scale-95 flex justify-center items-center gap-2"
+                    >
+                      保存设置
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
 </html>
